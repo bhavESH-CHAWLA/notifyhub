@@ -12,15 +12,17 @@ const credentials = z.object({
   password: z.string().min(8).max(128),
 });
 
+const sessionCookieOptions = {
+  httpOnly: true,
+  secure: config.nodeEnv === "production",
+  sameSite: config.nodeEnv === "production" ? "none" : "lax",
+  maxAge: 12 * 60 * 60 * 1000,
+  path: "/",
+};
+
 function setSession(res, userId) {
   const token = jwt.sign({ sub: userId }, config.jwtSecret, { expiresIn: "12h" });
-  res.cookie("session", token, {
-    httpOnly: true,
-    secure: config.nodeEnv === "production",
-    sameSite: "lax",
-    maxAge: 12 * 60 * 60 * 1000,
-    path: "/",
-  });
+  res.cookie("session", token, sessionCookieOptions);
 }
 
 router.post("/register", async (req, res) => {
@@ -42,7 +44,7 @@ router.post("/login", async (req, res) => {
 });
 
 router.post("/logout", (_req, res) => {
-  res.clearCookie("session", { httpOnly: true, sameSite: "lax", secure: config.nodeEnv === "production", path: "/" });
+  res.clearCookie("session", sessionCookieOptions);
   res.status(204).end();
 });
 

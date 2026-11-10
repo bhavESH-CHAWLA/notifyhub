@@ -1,3 +1,5 @@
+import { InvalidEmailScheduleError } from "../services/emailSchedule.js";
+
 export function notFound(_req, res) {
   res.status(404).json({ message: "This endpoint does not exist." });
 }
@@ -5,6 +7,9 @@ export function notFound(_req, res) {
 export function errorHandler(error, _req, res, _next) {
   if (error.name === "ZodError") {
     return res.status(400).json({ message: error.issues[0]?.message || "Invalid request." });
+  }
+  if (error instanceof InvalidEmailScheduleError) {
+    return res.status(400).json({ message: error.message });
   }
   if (error.code === 11000) {
     return res.status(409).json({ message: "An account with that email already exists." });

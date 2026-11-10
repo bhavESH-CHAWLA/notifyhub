@@ -44,10 +44,15 @@ An original MERN team dashboard with task tracking, role-based access, analytics
 | `NODE_ENV` | server | Use `development` locally and `production` when deployed |
 | `SEED_ADMIN_EMAIL` | server | Email for the one-time administrator setup |
 | `SEED_ADMIN_PASSWORD` | server | Strong password for the one-time administrator setup |
+| `BREVO_API_KEY` | server | Brevo transactional email API key |
+| `EMAIL_FROM` | server | Verified sender email address in Brevo |
+| `EMAIL_FROM_NAME` | server | Sender display name (optional; defaults to `NotifyHub`) |
 | `VITE_API_URL` | client | API base URL; blank uses the local Vite proxy |
 | `VITE_SOCKET_URL` | client | WebSocket origin; blank uses the current host |
 
 Keep actual `.env` files private. Never publish `JWT_SECRET`, database credentials, or the administrator password.
+
+Configure both `BREVO_API_KEY` and `EMAIL_FROM` in the API service to enable task emails. The sender must be verified in Brevo. Task creators can choose an email on creation, one day before the due date, at the due date, or no email. The API stores scheduled emails in MongoDB, checks the queue every 30 seconds, and retries transient failures up to five times.
 
 ## Roles
 

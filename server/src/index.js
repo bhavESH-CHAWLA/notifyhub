@@ -4,6 +4,7 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import app from "./app.js";
 import { config } from "./config.js";
+import { startEmailWorker } from "./services/emailWorker.js";
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -32,11 +33,13 @@ io.on("connection", (socket) => {
 app.set("io", io);
 
 await mongoose.connect(config.mongoUri);
+const stopEmailWorker = startEmailWorker();
 server.listen(config.port, () => {
   console.log(`NotifyHub API listening on port ${config.port}`);
 });
 
 async function shutdown() {
+  stopEmailWorker();
   await mongoose.disconnect();
   server.close(() => process.exit(0));
 }

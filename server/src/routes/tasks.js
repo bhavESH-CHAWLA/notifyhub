@@ -4,6 +4,9 @@ import { requireAdmin, requireAuth } from "../middleware/auth.js";
 import Notification from "../models/Notification.js";
 import Task from "../models/Task.js";
 import User from "../models/User.js";
+import { config } from "../config.js";
+import { emailScheduleFields } from "../services/emailSchedule.js";
+import { processEmailQueue } from "../services/emailWorker.js";
 
 const router = Router();
 const taskInput = z.object({
@@ -13,6 +16,7 @@ const taskInput = z.object({
   priority: z.enum(["low", "medium", "high"]).optional(),
   dueDate: z.union([z.string().datetime().or(z.literal("")), z.null()]).optional(),
   owner: z.union([z.string().regex(/^[a-f\d]{24}$/i), z.literal("")]).optional(),
+  emailTiming: z.enum(["none", "immediate", "one_day_before", "at_due_date"]).optional(),
 });
 
 router.use(requireAuth);
@@ -28,13 +32,20 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   const input = taskInput.parse(req.body);
+  const emailTiming = input.emailTiming || "none";
+  if (emailTiming !== "none" && !config.emailEnabled) {
+    return res.status(503).json({ message: "Email delivery is not configured. Ask your administrator to configure Brevo." });
+  }
   const owner = req.user.role === "admin" && input.owner ? input.owner : req.user.id;
+  const dueDate = input.dueDate ? new Date(input.dueDate) : null;
+  const emailFields = emailScheduleFields(emailTiming, dueDate);
   const task = await Task.create({
     title: input.title,
     description: input.description,
     status: input.status,
     priority: input.priority,
-    dueDate: input.dueDate || null,
+    dueDate,
+    ...emailFields,
     owner,
     createdBy: req.user.id,
   });
@@ -47,6 +58,9 @@ router.post("/", async (req, res) => {
     });
     req.app.get("io").to(`user:${owner}`).emit("notification:new", notification);
   }
+  if (emailTiming === "immediate") {
+    processEmailQueue().catch((error) => console.error("Email queue processing failed.", error));
+  }
   res.status(201).json({ task: saved });
 });
 
@@ -56,9 +70,27 @@ router.patch("/:id", async (req, res) => {
   const update = { ...input };
   if (req.user.role !== "admin") delete update.owner;
   if (update.dueDate !== undefined) update.dueDate = update.dueDate || null;
-  const previous = await Task.findOne(filter).select("owner title");
+  const previous = await Task.findOne(filter).select("owner title dueDate emailTiming emailStatus status");
   if (!previous) return res.status(404).json({ message: "Task not found." });
-  if (update.status !== undefined) update.completedAt = update.status === "done" ? new Date() : null;
+  const ownerChanged = update.owner !== undefined && String(update.owner || req.user.id) !== String(previous.owner);
+  if (update.owner === "") update.owner = req.user.id;
+  if (update.status !== undefined) {
+    update.completedAt = update.status === "done" ? new Date() : null;
+    if (update.status === "done" && ["pending", "processing"].includes(previous.emailStatus)) {
+      update.emailStatus = "cancelled";
+      update.emailNextAttemptAt = null;
+      update.emailClaimedAt = null;
+    }
+  }
+  const timingChanged = input.emailTiming !== undefined && input.emailTiming !== previous.emailTiming;
+  const dueDateChanged = input.dueDate !== undefined;
+  if ((timingChanged || dueDateChanged || ownerChanged) && update.status !== "done" && previous.status !== "done") {
+    const emailTiming = input.emailTiming || previous.emailTiming;
+    if (emailTiming !== "none" && !config.emailEnabled) {
+      return res.status(503).json({ message: "Email delivery is not configured. Ask your administrator to configure Brevo." });
+    }
+    Object.assign(update, emailScheduleFields(emailTiming, update.dueDate ?? previous.dueDate));
+  }
   const task = await Task.findOneAndUpdate(filter, update, { new: true, runValidators: true })
     .populate("owner", "name email");
   if (!task) return res.status(404).json({ message: "Task not found." });
@@ -69,6 +101,9 @@ router.patch("/:id", async (req, res) => {
       message: `${req.user.name} assigned you “${task.title}”.`,
     });
     req.app.get("io").to(`user:${task.owner._id}`).emit("notification:new", notification);
+  }
+  if (task.emailTiming === "immediate" && task.emailStatus === "pending") {
+    processEmailQueue().catch((error) => console.error("Email queue processing failed.", error));
   }
   res.json({ task });
 });

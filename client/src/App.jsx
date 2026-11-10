@@ -361,12 +361,16 @@ function NotificationView({ notifications, onRead }) {
 }
 
 function TaskDialog({ onClose, onSubmit, busy, team }) {
+  const [emailTiming, setEmailTiming] = useState("immediate");
+  const needsDueDate = emailTiming === "one_day_before" || emailTiming === "at_due_date";
+
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><form className="task-modal" onSubmit={onSubmit}>
     <div className="modal-heading"><div><span className="form-kicker">MAKE IT HAPPEN</span><h2>Create a task</h2><p>Give the next great idea a place to start.</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
     <label className="field-label">Task name<input className="text-input" name="title" placeholder="e.g. Plan the product launch" maxLength={140} required autoFocus /></label>
     <label className="field-label">Description <span className="optional">Optional</span><textarea className="text-input textarea" name="description" placeholder="Add a few helpful details..." maxLength={2000} rows={3} /></label>
-    <div className="form-grid"><label className="field-label">Priority<select className="text-input" name="priority" defaultValue="medium"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label><label className="field-label">Due date<input className="text-input" name="dueDate" type="date" /></label></div>
+    <div className="form-grid"><label className="field-label">Priority<select className="text-input" name="priority" defaultValue="medium"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label><label className="field-label">Due date<input className="text-input" name="dueDate" type="date" required={needsDueDate} /></label></div>
     {team.length > 0 && <label className="field-label">Assign to<select className="text-input" name="owner"><option value="">Myself</option>{team.map((member) => <option key={member._id} value={member._id}>{member.name}</option>)}</select></label>}
+    <label className="field-label">Email notification<select className="text-input" name="emailTiming" value={emailTiming} onChange={(event) => setEmailTiming(event.target.value)}><option value="immediate">When the task is created</option><option value="one_day_before">One day before the due date</option><option value="at_due_date">At the due date</option><option value="none">No email</option></select></label>
     <div className="modal-actions"><button className="secondary-button" type="button" onClick={onClose}>Cancel</button><button className="primary-button" type="submit" disabled={busy}><Plus size={16} />{busy ? "Creating..." : "Create task"}</button></div>
   </form></div>;
 }

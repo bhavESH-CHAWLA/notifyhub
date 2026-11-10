@@ -1,0 +1,20 @@
+{
+  "name": "notifyhub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Team task dashboard with real-time notifications",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "install:all": "npm install --workspaces",
+    "dev": "concurrently -k -n api,web -c blue,green \"npm:dev --workspace=server\" \"npm:dev --workspace=client\"",
+    "build": "npm run build --workspace=client",
+    "lint": "npm run lint --workspace=client",
+    "test": "npm test --workspace=server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
